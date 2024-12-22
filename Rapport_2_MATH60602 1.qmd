@@ -1,0 +1,742 @@
+---
+title: "Rapport_2_MATH60602"
+author: "Mérick Djamadar (11347160), Jean-Michel Gagné (11308862), Lucas Petropoulos (11352363), Antoine Laverdière-Allaire (11306200)"
+format:
+  html:
+    self-contained: true
+toc: true
+toc-title: "Sommaire"
+toc-location: left
+toc-depth: 4
+editor: visual
+---
+
+# Rapport écrit - Collecte de fonds (suite) et rétention
+
+## Question 1
+
+L'objectif de cette section est d'effectuer une analyse factorielle des données qui sont disponibles via les réponses à un questionnaire décrivant la personnalité des répondants. Cette analyse factorielle permettera d'identifier un nombre de facteur et effectuer une analyse de regroupement basé sur des échelles afin de segmenter les inidvidus et identifier ce qui distingue ces différents segments.
+
+### Préparation du jeux de données
+
+Nous devons procéder préalablement à une analyse exploratoire des données afin d'en visualiser et vérifier le contenu. D'abord, il sera nécessaire de modifier le nom de 4 variables afin d'obtenir une interprétation cohérente des résultats. Les variables "Relaxed", "Emotionally_Stable", "Easily_Distracted" et "Curious" correspondent plutôt à "Full_of_ideas, "Quick_to_understand_things", "Pessimistic" et "Easily_irritated" respectivement.
+
+```{r include=FALSE}
+
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(hecmulti)
+library(kableExtra)
+library(tibble)
+library(knitr)
+library(psych)
+library(tidyr)
+library(mclust)
+library(factoextra)
+```
+
+```{r include=FALSE}
+file_path1 <- "C:/Users/14388/OneDrive - HEC Montréal/Documents/HEC MONTRÉAL/SESSION/MAÎTRISE/1-A2024/ANALYSE MULTIDIMENSIONNELLE/DEVOIR2/TestPersonnalite.csv"
+datatestpersonnalite <- read.csv(file_path1)
+```
+
+```{r include=FALSE}
+colnames(datatestpersonnalite)[colnames(datatestpersonnalite) == "Relaxed"] <- "Full_of_ideas"
+colnames(datatestpersonnalite)[colnames(datatestpersonnalite) == "Emotionally_stable"] <- "Quick_to_understand_things"
+colnames(datatestpersonnalite)[colnames(datatestpersonnalite) == "Curious"] <- "Easily_irritated"
+colnames(datatestpersonnalite)[colnames(datatestpersonnalite) == "Easily_distracted"] <- "Pessimistic"
+```
+
+### Analyse exploratoire et visualisation des données
+
+```{r echo=FALSE}
+
+# Liste des variables à tracer
+variables <- c("Talkative", "Outgoing", "Forgiving", "Thorough", "Efficient", 
+               "Energetic", "Helpful_unselfish", "Considerate", "Cooperative", 
+               "Full_of_ideas", "Quick_to_understand_things", "Sophisticated_in_arts", 
+               "Pessimistic", "Moody", "Easily_irritated")
+
+# Générer les graphiques avec aes() et .data[[var]]
+plots <- lapply(variables, function(var) {
+  ggplot(datatestpersonnalite, aes(x = .data[[var]])) + # Utilisation moderne
+    geom_histogram(binwidth = 1, fill = "skyblue", color = "black") +
+    labs(x = var, y = "Fréquence") +
+    theme_minimal() +
+    theme(plot.title = element_blank()) # Suppression du titre
+})
+
+# Créer les groupes de graphiques
+# Organisation des graphiques en groupes avec patchwork
+group1 <- (plots[[1]] + plots[[2]] + plots[[3]] + plots[[4]] + plots[[5]] + plots[[6]]) +
+          plot_layout(ncol = 3) & theme_classic()
+group2 <- (plots[[7]] + plots[[8]] + plots[[9]] + plots[[10]] + plots[[11]] + plots[[12]]) +
+          plot_layout(ncol = 3) & theme_classic()
+
+# Forcer les 3 derniers graphiques à occuper une grille de 3 x 2
+group3 <- (plots[[13]] + plots[[14]] + plots[[15]] + plot_spacer() + plot_spacer() + plot_spacer()) +
+          plot_layout(ncol = 3) & theme_classic()
+
+
+# Afficher chaque groupe séparément
+print(group1) # Affiche les 6 premiers graphiques
+print(group2) # Affiche les 6 suivants
+print(group3) # Affiche les 3 derniers
+
+
+```
+
+À première vue, les variables semblent distribuée normalement et rien de spécifique ou d'anormal ne semble ressortir de cette première analyse.
+
+### a) Analyse factorielle exploratoire (AFE)
+
+#### 1. Détermination du nombre de facteurs
+
+La première étape serait d'effectuer une analyse factorielle exploratoire à l'aide de la méthode des composantes principales afin de détermier le nombre de facteurs que nous jugeons adéquat à utiliser. Le critère de Kaiser et le diagramme d'éboulis semblent être des méthodes appropriées.
+
+```{r}
+
+# Sélection des colonnes quantitatives pertinentes
+db <- datatestpersonnalite |> select(-ID.ID5.)
+
+# Calcul de la matrice de corrélation
+covdb <- cor(db)
+
+# Décomposition spectrale
+decompo <- eigen(covdb)
+
+# Diagramme d'éboulis pour choisir le nombre de composantes
+eboulis(decompo)
+
+```
+
+Le diagramme d'éboulis trace les valeurs propres en fonction des composantes principales calculées. Le "point de coude" où la variance additionnelle expliquée devient négligeable se trouve à 4 ou 5 composantes. Nous allons explorer ces deux options.
+
+#### 2. Analyse des composantes principales
+
+Nous allons commencer par déterminer les chargements factoriels pour 4 et 5 facteurs en utilisant l'ACP.
+
+```{r}
+
+
+# Analyse en composantes principales avec 4 facteurs
+cp_4 <- factocp(x = datatestpersonnalite |> select(-ID.ID5.), nfact = 4)
+#print(cp_4, cutoff = 0.4) # Affiche les chargements factoriels avec un seuil de 0.4
+
+
+# Analyse en composantes principales avec 5 facteurs
+cp_5 <- factocp(x = datatestpersonnalite |> select(-ID.ID5.), nfact = 5)
+#print(cp_5, cutoff = 0.4) # Affiche les chargements factoriels avec un seuil de 0.4
+
+# Chargements factoriels pour 4 facteurs
+cp_4_loadings <- as.data.frame(unclass(cp_4$loadings)) |> 
+  rownames_to_column(var = "Variable") |>  # Ajoute les noms des variables dans une colonne
+  mutate(across(-Variable, ~ ifelse(abs(.) >= 0.4, round(., 3), ""))) # Applique un seuil de 0.4
+
+# Chargements factoriels pour 5 facteurs
+cp_5_loadings <- as.data.frame(unclass(cp_5$loadings)) |> 
+  rownames_to_column(var = "Variable") |>  # Ajoute les noms des variables dans une colonne
+  mutate(across(-Variable, ~ ifelse(abs(.) >= 0.4, round(., 3), ""))) # Applique un seuil de 0.4
+
+
+```
+
+```{r echo=FALSE}
+# Affichage des chargements pour 4 facteurs
+kable(cp_4_loadings, caption = "Chargements factoriels (ACP, 4 facteurs)") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+# Affichage des chargements pour 5 facteurs
+kable(cp_5_loadings, caption = "Chargements factoriels (ACP, 5 facteurs)") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+#### 3. Estimation par maximum de vraisemblance
+
+Nous pouvons maintenant faire notre estimation par maximum de vraisemblance afin de confirmer les résultats obtenus ci-haut avec l'ACP. L'AFE avec rotation varimax va nous permettre de confirmer les résultats que nous avons obtenus avec l'ACP.
+
+```{r}
+
+# Analyse factorielle avec 4 facteurs
+fa_4 <- factanal(x = datatestpersonnalite |> select(-ID.ID5.), factors = 4, rotation = "varimax")
+
+# Analyse factorielle avec 5 facteurs
+fa_5 <- factanal(x = datatestpersonnalite |> select(-ID.ID5.), factors = 5, rotation = "varimax")
+
+# Chargements factoriels pour 4 facteurs
+fa_4_loadings <- as.data.frame(unclass(fa_4$loadings)) |> 
+  rownames_to_column(var = "Variable") |>  # Ajoute les noms des variables dans une colonne nommée "Variable"
+  mutate(across(-Variable, ~ ifelse(abs(.) >= 0.4, round(., 3), ""))) # Applique le seuil de 0.4
+
+# Chargements factoriels pour 5 facteurs
+fa_5_loadings <- as.data.frame(unclass(fa_5$loadings)) |> 
+  rownames_to_column(var = "Variable") |>  # Ajoute les noms des variables dans une colonne nommée "Variable"
+  mutate(across(-Variable, ~ ifelse(abs(.) >= 0.4, round(., 3), ""))) # Applique le seuil de 0.4
+```
+
+```{r echo=FALSE}
+# Affichage des chargements factoriels pour 4 facteurs
+kable(fa_4_loadings, caption = "Chargements factoriels (4 facteurs)") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+# Affichage des chargements factoriels pour 5 facteurs
+kable(fa_5_loadings, caption = "Chargements factoriels (5 facteurs)") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+Afin de comparer le nombre optimal de facteurs, nous allons utiliser AIC et BIC.
+
+```{r}
+
+# Comparaison de modèles pour 1 à 5 facteurs
+results <- ajustement_factanal(datatestpersonnalite |> select(-ID.ID5.), factors = 1:5)
+```
+
+```{r echo=FALSE}
+# Afficher les résultats dans un tableau
+knitr::kable(results, digits = 2)
+```
+
+Les résultats obtenus ci-haut démontrent que la solution à 5 facteurs est plus robuste, comme le confirme les critères AIC et BIC.
+
+#### 4. Réflexions jusqu'à présent
+
+Au départ, nous avons ajusté notre modèle sur 4 Factors (comme si dessus), ce qui avait donné de bons résultats initiaux. Cependant, en voyant les 4 Factor proposés et après avoir observé un diagramme d'Eboulis, nous avons décidé d'explorer un ajustement sur 5 facteurs, pour facilité l'interprétation des résultats et vérifier si nous pouvions obtenir des valeurs plus faibles dans les critères d'information AIC, BIC. En utilisant le code ajustement_factanal fourni dans le cours, nous avons constaté que les valeurs d'AIC et de BIC les plus faibles étaient obtenues avec 5 facteurs, ce qui indique une meilleure qualité d'ajustement du modèle. De plus, il s'agit du premier point de coupure où le critère "heywood" est égal à "non", ce qui signifie qu'il n'y a plus de problème d'identifiabilité dans le modèle.
+
+#### 5. Création des échelles et calcul des alphas de Cronbach
+
+```{r}
+# Calcul des alphas de Cronbach
+alphaSoc <- psych::alpha(datatestpersonnalite[,c("Talkative", "Outgoing", "Forgiving")])$total$raw_alpha
+alphaProd <- psych::alpha(datatestpersonnalite[,c("Thorough", "Efficient", "Energetic")])$total$raw_alpha
+alphaMood <- psych::alpha(datatestpersonnalite[,c("Pessimistic", "Moody", "Easily_irritated")])$total$raw_alpha
+alphaCreat <- psych::alpha(datatestpersonnalite[,c("Full_of_ideas", "Quick_to_understand_things", "Sophisticated_in_arts")])$total$raw_alpha
+alphaSymp <- psych::alpha(datatestpersonnalite[,c("Helpful_unselfish", "Considerate", "Cooperative")])$total$raw_alpha
+
+# Résumé des alphas
+alpha_values <- c(alphaSoc, alphaProd, alphaMood, alphaCreat, alphaSymp)
+alpha_table <- data.frame(
+  Group = c("Sociabilité", "Productivité", "Irritabilité", "Créativité", "Sympathie"),
+  CronbachAlpha = round(alpha_values, 3) # Arrondir pour une présentation claire
+)
+```
+
+```{r echo=FALSE}
+# Tableau des alphas
+kable(alpha_table, caption = "Cohérence interne des échelles (Alpha de Cronbach)", format = "html") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+Les Alpha de Cronbach sont tous suppérieurs à 0.6 ce qui témoigne de la cohérence interner de nos échelles.
+
+```{r}
+
+# Création des échelles individuellement sous forme de vecteurs
+ech_Social <- rowMeans(datatestpersonnalite[, c("Talkative", "Outgoing", "Forgiving")], na.rm = TRUE)
+ech_Productivité <- rowMeans(datatestpersonnalite[, c("Thorough", "Efficient", "Energetic")], na.rm = TRUE)
+ech_Moodiness <- rowMeans(datatestpersonnalite[, c("Pessimistic", "Moody", "Easily_irritated")], na.rm = TRUE)
+ech_Creativity <- rowMeans(datatestpersonnalite[, c("Full_of_ideas", "Quick_to_understand_things", "Sophisticated_in_arts")], na.rm = TRUE)
+ech_Sympathy <- rowMeans(datatestpersonnalite[, c("Helpful_unselfish", "Considerate", "Cooperative")], na.rm = TRUE)
+
+# Regroupement des échelles dans un nouveau tableau `data_echelles`
+data_echelles <- data.frame(
+  Sociabilité = ech_Social,
+  Productivité = ech_Productivité,
+  Irritabilité = ech_Moodiness,
+  Créativité = ech_Creativity,
+  Sympathie = ech_Sympathy
+)
+```
+
+```{r echo=FALSE}
+
+# Affichage du tableau des échelles
+kable(head(data_echelles), caption = "Tableau des échelles calculées individuellement", format = "html") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+#### 6. Conclusion de la question a)
+
+Puisque les valeurs de Cronbach sont tous satisfaisants (plus grand que 0.6) tout semble cohérents et les échelles peuvent être consiédérées comme satisfaisantes. Nous retenons 5 échelles : Socialibité, Productivité, Irritabilité, Créativité et Sympathie.
+
+### b) Analyse de regroupement
+
+Pour l'analyse de regroupement, nous avons utilisé une approche utilisant des mélanges de modèles Gaussiens. La réduction de la dimension à l'aide des échelles qui a été fait au préalable nous permet de simplifier le coût de calcul de notre méthode de regroupement, mais aussi d'obtenir des résultats plus facilement interprétable. Cette approche, qui utilise le paquet mclust, ajuste des mélanges de modèles utilisant plusieurs structures de covariances et fait varier le nombre de regroupement. Parmi ces modèles, nous allons sélectionner le modèle qui possède la plus petite valeur du BIC.
+
+#### 1. Mélange de modèles Gaussiens
+
+```{r}
+data_echelles_std <- scale(data_echelles) #Standardisation usuelle
+```
+
+```{r}
+## Mélanges de modèles gaussiens
+set.seed(60602)
+mmg <- Mclust(data = data_echelles_std,
+              G = 1:10,
+              # Ajouter composante uniforme
+              #  pour bruit (aberrances)
+              initialization = list(noise = TRUE))
+
+
+# Ajouter les classifications des clusters à vos données
+data_echelles$Cluster <- mmg$classification
+
+
+```
+
+Dans le paquet mclust, nous avons ajouté un composante de bruit comme indiqué en commentaire dans le code dans le but d'atténuer l'impact des valeurs abbérantes dans le processus de segmentation. Nous pouvons maintenant choisir le modèle avec le plus petit BIC.
+
+#### 2. Maximum -BIC
+
+```{r}
+# 3. Visualisation des critères BIC pour chaque modèle
+plot(mmg, what = "BIC")
+
+# 4. Résumé de la segmentation
+summary_mmg <- summary(mmg)
+
+# Affichage des informations du modèle sélectionné
+model_selected <- mmg$modelName
+cat("Modèle sélectionné : ", model_selected, "\n")
+
+```
+
+Le modèle sélectionné est alors le EEE. Nous pouvons ensuite obtenir une représentation graphique de nos regroupements.
+
+#### 3. Structure de regroupement avec ellipsoides de confiance
+
+```{r echo=FALSE}
+
+# 5. Ajout des clusters aux données originales
+data_echelles$Cluster <- mmg$classification
+
+# 6. Moyennes et écarts-types des variables par cluster
+cluster_stats <- data_echelles |> 
+  group_by(Cluster) |> 
+  summarise(
+    Sociabilité = paste0(round(mean(Sociabilité, na.rm = TRUE), 2), " ± ", round(sd(Sociabilité, na.rm = TRUE), 2)),
+    Productivité = paste0(round(mean(Productivité, na.rm = TRUE), 2), " ± ", round(sd(Productivité, na.rm = TRUE), 2)),
+    Irritabilité = paste0(round(mean(Irritabilité, na.rm = TRUE), 2), " ± ", round(sd(Irritabilité, na.rm = TRUE), 2)),
+    Créativité = paste0(round(mean(Créativité, na.rm = TRUE), 2), " ± ", round(sd(Créativité, na.rm = TRUE), 2)),
+    Sympathie = paste0(round(mean(Sympathie, na.rm = TRUE), 2), " ± ", round(sd(Sympathie, na.rm = TRUE), 2))
+  )
+
+# 7. Visualisation des clusters avec un graphique en barres
+cluster_counts <- data.frame(table(data_echelles$Cluster))
+colnames(cluster_counts) <- c("Cluster", "Taille")
+
+
+# Graphique de dispersion des deux premières dimensions (pour visualiser les clusters)
+fviz_cluster(list(data = data_echelles_std, cluster = mmg$classification), 
+             geom = "point", ellipse.type = "norm", palette = "jco", ggtheme = theme_minimal())
+
+```
+
+Voici également les statistiques descriptives de nos regroupements pour une interprétation plus détaillée:
+
+```{r echo=FALSE}
+# Affichage des résultats
+kable(cluster_stats, caption = "Moyennes et écarts-types des variables par cluster", format = "html") |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+# Visualisation des clusters : Graphique en barres
+ggplot(cluster_counts, aes(x = as.factor(Cluster), y = Taille, fill = as.factor(Cluster))) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution des individus par cluster", x = "Cluster", y = "Nombre d'individus") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3")
+```
+
+#### 4.Interprétation des résultats
+
+Le modèle a identifié 4 composantes principales et une composante supplémentaire pour représenter le bruit ou les points aberrants
+
+Voici les 4 profils indentifiés basés sur nos 5 dimensiosn :
+
+**PROFIL 1** - 190 individus Personnes sociables et créatives, mais moins axé sur la coopération ou l’altruisme que d'autres individus ayant répondus au questionnaires
+
+**PROFIL 2** - 140 individus Cluster caractérisé par une haute productivité mais une faible sociabilité. Individus efficaces et orientés vers les tâches, mais moins extravertis ou communicatifs
+
+**PROFIL 3** - 204 individus Personnes sociables et créatives mais significativement plus axée vers la sympathie et l'altruisme que les individus du profil 1.
+
+**PROFIL 4** - 110 individus Ce cluster a une irritabilité marquée et une faible créativité. Individus avec des tempéraments plus réactifs ou négatifs.
+
+**PROFIL 5** - 156 individus Ce groupe est le plus irritable, mais présente également une bonne créativité. Cela pourrait refléter des personnes artistiques, mais sensibles ou instables.
+
+### c) Caractéristiques des segments
+
+Dans cette partie, nous voulons reprendre les informations sociaux démographiques du devoir 1 et associer nos segments à ces caractéristiques afin de voir comment les segments diffères les uns des autres.
+
+```{r echo=FALSE}
+load("C:/Users/14388/OneDrive - HEC Montréal/Documents/HEC MONTRÉAL/SESSION/MAÎTRISE/1-A2024/ANALYSE MULTIDIMENSIONNELLE/Travail d'équipe/Scrip_rapport/FinalTable.RData")
+```
+
+```{r}
+# Créer un tableau avec les ID et les clusters
+tableau_clusters <- data.frame(
+  ID = datatestpersonnalite$ID.ID5.,  # La colonne ID dans vos données d'origine
+  Cluster = data_echelles$Cluster     # La classification des clusters obtenue avec Mclust
+)
+
+# Joindre les deux tables en gardant uniquement les IDs correspondants
+FinalTable_Match <- FinalTable %>%
+  inner_join(tableau_clusters, by = "ID")
+
+```
+
+#### 1. Générer des statistiques descriptives par cluster
+
+Pour chaque variable, vous pouvez calculer des statistiques descriptives **par cluster** :
+
+-   Moyenne
+
+-   Écart-type
+
+-   Médiane
+
+-   Min/Max
+
+```{r}
+
+# Statistiques descriptives par cluster
+stats_par_cluster <- FinalTable_Match %>%
+  group_by(Cluster) %>%
+  summarise(
+    n = n(),  # Taille de chaque cluster
+    Age_Mean = round(mean(Age, na.rm = TRUE), 2),
+    Age_SD = round(sd(Age, na.rm = TRUE), 2),
+    Salary_Mean = round(mean(Salary, na.rm = TRUE), 2),
+    Salary_SD = round(sd(Salary, na.rm = TRUE), 2),
+    Donation_2023_Mean = round(mean(Donation_2023, na.rm = TRUE), 2),
+    Sum_Donations_Mean = round(mean(Sum_Donations, na.rm = TRUE), 2),
+    Years_Membership_Mean = round(mean(Years_Membership, na.rm = TRUE), 2),
+    Times_Read_Mean = round(mean(Times_Read, na.rm = TRUE), 2)
+  )
+
+```
+
+```{r echo=FALSE}
+# Affichage des statistiques dans un tableau structuré
+kable(stats_par_cluster, 
+      caption = "Statistiques descriptives par cluster", 
+      format = "html") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+```
+
+#### 2. visualisation des résultats
+
+```{r echo=FALSE}
+
+# Boxplot pour Age
+ggplot(FinalTable_Match, aes(x = as.factor(Cluster), y = Age, fill = as.factor(Cluster))) +
+  geom_boxplot() +
+  labs(title = "Distribution de l'âge par cluster", x = "Cluster", y = "Âge") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3")
+
+# Boxplot pour Salary
+ggplot(FinalTable_Match, aes(x = as.factor(Cluster), y = Salary, fill = as.factor(Cluster))) +
+  geom_boxplot() +
+  labs(title = "Distribution du salaire par cluster", x = "Cluster", y = "Salaire") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3")
+
+# Boxplot pour Donations 2023
+ggplot(FinalTable_Match, aes(x = as.factor(Cluster), y = Donation_2023, fill = as.factor(Cluster))) +
+  geom_boxplot() +
+  labs(title = "Distribution des dons en 2023 par cluster", x = "Cluster", y = "Donations 2023") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3")
+
+```
+
+#### 3. Statistiques descriptives des variables catégorielles
+
+Maintenant, voici les statistiques descriptives de nos variables catégorielles avec une visualisation graphiques pour faciliter l'interprétation.
+
+```{r}
+# Répartition par sexe
+sexe_par_cluster <- FinalTable_Match %>%
+  group_by(Cluster, Sexe) %>%
+  summarise(Effectif = n(), .groups = "drop")
+
+
+# Répartition par niveau d'éducation
+education_par_cluster <- FinalTable_Match %>%
+  group_by(Cluster, Education) %>%
+  summarise(Effectif = n(), .groups = "drop")
+
+
+# Répartition par ville
+city_par_cluster <- FinalTable_Match %>%
+  group_by(Cluster, City) %>%
+  summarise(Effectif = n(), .groups = "drop")
+
+
+
+```
+
+```{r echo=FALSE}
+# Barplot pour la répartition par sexe
+ggplot(FinalTable_Match, aes(x = as.factor(Cluster), fill = as.factor(Sexe))) +
+  geom_bar(position = "fill") +
+  labs(title = "Répartition du sexe par cluster", x = "Cluster", y = "Proportion", fill = "Sexe") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Pastel1")
+
+# Barplot pour Education
+ggplot(FinalTable_Match, aes(x = as.factor(Cluster), fill = Education)) +
+  geom_bar(position = "fill") +
+  labs(title = "Répartition des niveaux d'éducation par cluster", x = "Cluster", y = "Proportion", fill = "Éducation") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2")
+
+# Barplot pour City
+ggplot(FinalTable_Match, aes(x = as.factor(Cluster), fill = City)) +
+  geom_bar(position = "fill") +
+  labs(title = "Répartition des villes par cluster", x = "Cluster", y = "Proportion", fill = "Ville") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2")
+
+```
+
+#### 4. Analyse des résultats
+
+**Segments 1 et 3**
+
+Les clusters 1 et 3 représentent nos segments ayant le plus grand nombre d'individu avec un niveau élevé d'éducation et ils affichent les salaires les plus élevés. Bien que ces clusters présentent de nombreuses similitudes, le cluster 3 se distingue par son caractère plus sympathique et altruiste. Cela se reflète dans leur statut de plus grands donateurs en 2023, avec les dons moyens les plus élevés et la plus grande fréquence de dons. De plus, ils sont les plus engagés avec notre newsletter. Le cluster 3 est probablement composé de professionnels hautement éduqués ayant des carrières réussies et soutenant fortement les organisations caritatives.
+
+Le cluster 1, en revanche, partage les salaires élevés et les niveaux d’éducation du cluster 3 mais se caractérise par des niveaux de coopération et de sociabilité plus faibles. Les membres de ce cluster étaient les deuxièmes plus faibles donateurs en 2023, avec des montants et une fréquence de dons inférieurs à la moyenne.
+
+**Segment 2**
+
+Le cluster 2 se distingue comme étant notre groupe le plus jeune, résidant principalement dans les zones rurales. Malgré leur jeunesse, ils gagnent des salaires relativement élevés en moyenne et donnent plus fréquemment que les membres du cluster 1. Ils obtiennent les meilleurs scores en productivité mais les plus bas en sociabilité, ce qui suggère qu’ils sont des individus travailleurs vivant dans des zones rurales et gagnant correctement leur vie.
+
+**Segment 4**
+
+Le cluster 4 est le deuxième groupe le plus actif, juste derrière le cluster 3. Les membres de ce cluster se classent deuxièmes en nombre de dons, dons en 2023, montants moyens des dons et engagement avec la newsletter. Ils sont le groupe le plus âgé et le moins éduqué, vivant principalement dans des zones urbaines ou suburbaines. Malgré les salaires moyens les plus bas parmi tous les clusters, ils sont des donateurs relativement actifs. Cependant, l’analyse indique qu’ils sont très irritables et peu créatifs.
+
+**Segment 5**
+
+Enfin, le cluster 5 est un groupe de jeunes donateurs inactifs avec des niveaux d’éducation élevés et des salaires moyens. Ils obtiennent les scores les plus élevés en irritabilité et semblent accorder peu d’importance aux organisations caritatives. Ce groupe pourrait être compris comme ésotérique et artistique, avec un intérêt limité pour la philanthropie.
+
+## Question 2
+
+Cette section vise à analyser et comparer différents programmes de maintenance des pompes hydrauliques via des méthodes d'analyse de survie afin de mettre en lumière leur impact sur leur durée de vie.
+
+```{r include=FALSE}
+
+#CODE POUR RSTUDIO
+Lifetime <- read.csv("C:/Users/14388/OneDrive - HEC Montréal/Documents/HEC MONTRÉAL/SESSION/MAÎTRISE/1-A2024/ANALYSE MULTIDIMENSIONNELLE/DEVOIR2/LifeTimes.csv")
+head(Lifetime)
+library(survival)
+
+```
+
+### a) Distribution du temps de vie des pompes
+
+#### 1. Graphiques du temps de survie
+
+```{r}
+strat_maintenance <- survfit(Surv(Time, Censored) ~ Plan, data = Lifetime)
+lograng <- survdiff(Surv(Time, Censored) ~ Plan, data = Lifetime)
+
+plot(survfit(Surv(Time, Censored) ~ Plan,
+             data = Lifetime),
+     conf.int = FALSE,
+     col = c("red", "blue", "green"),
+     xlab = "Time",
+     ylab = "Fonction de survie",
+     main = "Courbes de survie par plan de maintenance")
+     legend("topright",
+     legend = c("Plan 1", "Plan 2", "Plan 3"),
+     col = c("red", "blue", "green"),
+     lty = 1,
+     cex = 0.8)
+
+```
+
+#### 2. Probabilité du temps de survie
+
+```{r}
+# Extraction des probabilités de survie pour 1800 jours
+summary_survival <- summary(strat_maintenance, times = 1800)
+
+
+```
+
+```{r echo=FALSE}
+# Création du tableau structuré
+results <- data.frame(
+  Plan = levels(as.factor(Lifetime$Plan)),
+  `Nombre à risque` = summary_survival$n.risk,
+  `Nombre d'événements` = summary_survival$n.event,
+  `Survie (%)` = round(summary_survival$surv * 100, 2), # Convertir en pourcentage
+  `IC inférieur (%)` = round(summary_survival$lower * 100, 2),
+  `IC supérieur (%)` = round(summary_survival$upper * 100, 2)
+)
+
+# Génération du tableau avec kable
+kable(results, 
+      caption = "Probabilités de survie estimées à 1800 jours", 
+      format = "html") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = FALSE)
+```
+
+Plan 1 (Aucune maintenance) survival = 0.855 : La probabilité qu’une pompe soit encore fonctionnelle après 5 ans est 85,5 %.
+
+Plan 2 (Maintenance au 6 mois) survival = 0.844 : La probabilité de survie après 5 ans est 84,4 %.
+
+Plan 3 (Maintenance au 12 mois) survival = 0.859 : La probabilité de survie après 5 ans est 85,9 %, ce qui est légèrement meilleur que pour Plan 1 et Plan 2.
+
+#### 3. Quartiles du temps de survie
+
+```{r}
+# Extraire les quartiles Kaplan-Meier
+quantiles_KM <- quantile(strat_maintenance, probs = c(0.25, 0.5, 0.75))
+
+
+```
+
+```{r echo=FALSE}
+# Transformer les résultats en dataframe
+quartiles_df <- tibble::tibble(
+  Plan = c("Plan 1", "Plan 2", "Plan 3"), # Une seule colonne "Plan"
+  `1er Quartile (Q1)` = quantiles_KM$quantile[, "25"],
+  `Médiane` = quantiles_KM$quantile[, "50"],
+  `3ème Quartile (Q3)` = quantiles_KM$quantile[, "75"],
+  `IC Inférieur Q1` = quantiles_KM$lower[, "25"],
+  `IC Supérieur Q1` = quantiles_KM$upper[, "25"]
+)
+
+# Générer un tableau formaté avec kable
+kable(quartiles_df, 
+      caption = "Quartiles du temps de vie par plan de maintenance (Kaplan-Meier)", 
+      format = "html") |> 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = FALSE)
+```
+
+Résultats des quartiles Kaplan-Meier
+
+Plan 1 : 1er quartile (Q1) = 3210 jours : 25 % des pompes sous ce plan ont une durée de vie inférieure à 3210 jours
+
+Plan 2 : 1er quartile (Q1) = 3192 jours : 25 % des pompes durent moins de 3192 jours.
+
+Plan 3 : 1er quartile (Q1) = 2902 jours : 25 % des pompes sous ce plan échouent avant 2902 jours, ce qui est inférieur aux Plans 1 et 2.
+
+Pour les plans 1, 2, 3 la médiane et le 3em quartile arrivent tous à la date de fin d'observation, soit 3600jours. En conséquence nous ne pouvons pas estimer adéquatement les Intervalles de Confiance pour ces deux quartiles (lower et upper) car la censure à droite est trop importante.
+
+#### 4. Explications sur les quartiles
+
+Pour notre 3 plans, la médiane et le 3e quartile atteignent tous la borne maximale de l'étude (3600 jours). Ceci indique que la majorité des pompes étaient encore fonctionnelles à la fin de la période d'observation et que nous observons beaucoup de censure à droite dans les données. Comme mentionné dans la question précédente, la censure limite aussi l'estimation des IC.
+
+En conclusion, c'est plutôt un bon signe global : la majorité des pompes survivent au delà que 10 ans quelque soit le niveau de maintenance qui leur est attribué. Si nous étions davantage intéressé par la survie à court terme (5 ans), une comparaison entre les moyennes des groupes serait tout indiquée.
+
+### b) Régression de Cox
+
+#### 1. Maintenance aux 6 mois
+
+```{r}
+# Ajuster le modèle de Cox
+cox_model <- coxph(Surv(Time, Censored) ~ Plan,
+              data = Lifetime,
+              ties = "exact")
+summary(cox_model)
+
+# Tester l'effet global de Plan
+car::Anova(cox_model, type = 3)
+```
+
+On peut remarquer ces valeurs importantes pour l'analyse de Cox de la variable Plan (comparaison globale des plans) :
+
+coef : 0.04424
+
+exp(coef) (HR) : 1.04523
+
+Intervalle de confiance à 95% pour HR : (0.8303, 1.316)
+
+p-value : 0.706
+
+Dans le modèle de régression de Cox, le Plan 1 (Aucune maintenance) est la catégorie de référence. Le rapport de risque (HR) pour Plan est de 1.045.On apercoit que ce ratio est très proche de 1.0 ce qui indique normalement que le plan 2 de maintenance n'a pas d'effet notable sur le risque instantané comparé au plan de référence (Plan 1). En analysant la p-value de 0.706, on voit que la valeur est plus grande que 0.05. De plus, l'intervalle de confiance \[0.8303; 1.316\] contient la valeur 1. Ces deux caractéristiques nous confirment que cet effet gloal est non-significatif.
+
+On va maintenant ajuster une nouvelle fois le modèle en utilisant des contraintes binaires pour comparer spécifiquement Plan 2 (6 mois) à Plan 1 (Aucun) dans le modèle de régression de Cox.
+
+```{r}
+# Créer une variable binaire pour comparer Plan 2 vs Plan 1
+Lifetime$Plan_2vs1 <- ifelse(Lifetime$Plan == 2, 1, 0)  # 1 = Plan 2 (6 mois), 0 = Plan 1 (aucun)
+
+# Ajuster le modèle de Cox pour comparer Plan 2 vs Plan 1
+cox_2vs1 <- coxph(Surv(Time, Censored) ~ Plan_2vs1, data = Lifetime, ties = "exact")
+
+# Afficher les résultats du modèle
+summary(cox_2vs1)
+```
+
+Voici le résumé des résultats :
+
+coef : -0.0838
+
+exp(coef) (Hazard Ratio) : 0.9196
+
+Intervalle de confiance à 95% : (0.6475, 1.306)
+
+p-value : 0.64
+
+On peut apercevoir que le risque instantané pour le plan 2 (6 mois) est environ 8 % plus faible que pour le plan 1. Toutefois, cette réduction n'est encore pas statistiquement significative puisque la p-value est \> 0.05, avec une valeur de 0.64 et l'intervalle de confiance à 95 % contient la valeur 1.
+
+On va maintenant pouvoir comparer les autres effets sur le risque instantané avec l'approche de comparaison binaire qu'on vient d'utiliser.
+
+#### 2. Maintenance au 12 mois
+
+```{r}
+Lifetime$Plan_3vs1 <- ifelse(Lifetime$Plan == 3, 1, 0)
+cox_3vs1 <- coxph(Surv(Time, Censored) ~ Plan_3vs1, data = Lifetime, ties = "exact")
+summary(cox_3vs1)
+
+```
+
+Voici le résumé des résultats de la sortie R:
+
+coef : 0.0944
+
+exp(coef) (Hazard Ratio) : 1.0990
+
+Intervalle de confiance à 95% : (0.7745, 1.56)
+
+p-value : 0.597
+
+Le risque instantané de défaillance pour le Plan 3 (12 mois) est environ 10 % plus élevé que le Plan 1 (Aucun). Cependant, comme pour la dernière comparaison entre les plans 1 et 2, la p-value est largement supérieure à 0.05 (0.597) et l'intervalle de confiance à 95 % de \[0.7745; 1.56\] contient la valeur 1. Cela fait en sort que l'effet observé n'est pas statistiquement significative.
+
+#### 3. Comparaison maintenance 6-12 mois
+
+```{r}
+# Créer une variable binaire pour comparer Plan 3 (12 mois) vs Plan 2 (6 mois)
+Lifetime$Plan_3vs2 <- ifelse(Lifetime$Plan == 3, 1, ifelse(Lifetime$Plan == 2, 0, NA))
+
+# Ajuster le modèle de Cox pour comparer Plan 3 vs Plan 2
+cox_3vs2 <- coxph(Surv(Time, Censored) ~ Plan_3vs2,
+                  data = Lifetime,
+                  ties = "exact")
+
+# Afficher les résultats
+summary(cox_3vs2)
+```
+
+Voici le résumé des résultats:
+
+coef : 0.1096
+
+exp(coef) (Hazard Ratio) : 1.1159
+
+Intervalle de confiance à 95% : (0.7592, 1.64)
+
+p-value : 0.577
+
+On apercoit que le risque instantané d’événement (défaillance) pour Plan 3 (12 mois) est environ 11.6% plus élevé que pour Plan 2 (6 mois). Par contre, comme pour les autres scénarios, on voit que la différence de risque instantané entre Plan 3 et Plan 2 n'est pas significative puisque la p-value est supérieure à 0.05 et que l'intervalle de confiance contient 1.
+
+Pour conclure, à partir des trois comparaisons effectuées, on s'apercoit qu'aucun n'a de différence significative dans ses résultats. Cela suggère donc que les plans de maintenance (6 mois ou 12 mois) n'ont pas d'effet significatif sur le risque de défaillance des pompes hydrauliques par rapport à l'absence de maintenance.
