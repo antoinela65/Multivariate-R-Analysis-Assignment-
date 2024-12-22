@@ -1,13 +1,10 @@
 # Multivariate-R-Analysis-Assignment- - Maintenance and Personality Analysis
 
 ---
-title: "README: Multivariate Analysis Assignment"
-output: github_document
----
 
 # Overview
 
-This repository contains analyses for the **MATH 60602** course assignment on fundraising and retention using advanced multivariate statistical techniques. The assignment focuses on two main datasets and analyses.
+This repository contains analyses for the **MATH 60602** course assignment at HEC Montreal on fundraising and retention using advanced multivariate statistical techniques. This group assignment focuses on two main datasets and analyses.
 
 ---
 
