@@ -1,6 +1,5 @@
 ---
 title: "Rapport_2_MATH60602"
-author: "Mérick Djamadar (11347160), Jean-Michel Gagné (11308862), Lucas Petropoulos (11352363), Antoine Laverdière-Allaire (11306200)"
 format:
   html:
     self-contained: true
