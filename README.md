@@ -4,7 +4,7 @@
 
 # Overview
 
-This repository contains analyses for the **MATH 60602** course assignment at HEC Montreal on fundraising and retention using advanced multivariate statistical techniques. This group assignment focuses on two main datasets and analyses.
+This repository contains analyses for the **MATH 60602** course assignment at HEC Montreal on fundraising and retention using advanced multivariate statistical techniques. This assignment focuses on two main datasets and analyses.
 
 ---
 
